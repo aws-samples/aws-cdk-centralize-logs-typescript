@@ -13,3 +13,4 @@ cfn_nag.txt
 third-party-licenses.txt
 .DS_Store
 *.iml
+cdk.context.json
