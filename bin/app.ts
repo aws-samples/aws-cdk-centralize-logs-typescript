@@ -20,7 +20,7 @@
 
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
-import {LogDestinationStack} from '../lib/stacks/stacks';
+import {LogDestinationStack} from '../lib/infrastructure/stacks/stacks';
 import {AwsSolutionsChecks} from "cdk-nag";
 
 

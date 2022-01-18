@@ -106,7 +106,7 @@ export class KinesisDeliveryStream extends Construct {
             timeout: Duration.seconds(5),
             runtime: Runtime.NODEJS_14_X,
             handler: "lambdaHandler",
-            entry: path.join(__dirname, `/../runtime/functions/kinesisDynamicPartitionLambda.ts`),
+            entry: path.join(__dirname, `/../../runtime/functions/kinesisDynamicPartitionLambda.ts`),
 
         });
         kinesisDynamicPartitionLambda.grantInvoke(centralizedLoggingRole)
