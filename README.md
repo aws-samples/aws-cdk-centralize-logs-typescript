@@ -1,17 +1,15 @@
-## My Project
+# aws-cdk-centralize-logs-typescript
 
-TODO: Fill this README out!
+This is a CDK project that set up centralized logging to an S3 bucket via a Kinesis Firehose.
+The solution allows you to specify trusted accounts for different regions and then will configure the CloudWatch Log Delivery Endpoint with proper permission in those regions
 
-Be sure to:
+Solution is based heavily on [Centralize Cloudwatch Log with CDK](https://github.com/aws-samples/aws-centralize-logs-using-cdk)
+## Architecture
 
-* Change the title in this README
-* Edit your repository description on GitHub
+![](./images/architecture.drawio.png)
 
-## Security
+## Useful commands
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
-
-## License
-
-This library is licensed under the MIT-0 License. See the LICENSE file.
+* `npm run build`   compile typescript to js
+* `cdk deploy -c account=<your_account> -c region=<your_region> -c trustedAccounts=<accountId>:<region>,<accountId>:<region>,...`
 
