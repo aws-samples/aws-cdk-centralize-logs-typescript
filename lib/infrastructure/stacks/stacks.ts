@@ -25,7 +25,9 @@ import {NagSuppressions} from "cdk-nag";
 
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
 export interface LogDestinationStackProps extends StackProps {
-    readonly trustedAccounts: Environment[]
+    trustedAccounts?: Environment[]
+    principalOrgIds?: string[]
+    regions?: string[]
 }
 
 export class LogDestinationStack extends Stack {
@@ -47,25 +49,41 @@ export class LogDestinationStack extends Stack {
             destinationBucket: centralizedLoggingBucket,
             role: centralizedLoggingRole,
         })
-        const trustedAccountsByRegion: Map<string, Environment[]> = new Map<string, Environment[]>()
-        props.trustedAccounts.forEach(value => {
-            if (value.region != null ) {
-                const environments = trustedAccountsByRegion.get(value.region)
-                if (environments != null) {
-                    environments.push(value)
-                } else {
-                    trustedAccountsByRegion.set(value.region, [value])
+        if(props.trustedAccounts!=null) {
+            const trustedAccountsByRegion: Map<string, Environment[]> = new Map<string, Environment[]>()
+            props.trustedAccounts.forEach(value => {
+                if (value.region != null) {
+                    const environments = trustedAccountsByRegion.get(value.region)
+                    if (environments != null) {
+                        environments.push(value)
+                    } else {
+                        trustedAccountsByRegion.set(value.region, [value])
+                    }
                 }
-            }
 
-        })
-        trustedAccountsByRegion.forEach((value, key) => {
-            new CloudwatchDestinationEndpoint(this, `${key}-endpoint`, {
-                destinationName: `${key}-endpoint`,
-                deliveryStream: deliveryStream.deliveryStream,
-                trustedAccounts: value
             })
-        })
+            trustedAccountsByRegion.forEach((value, key) => {
+                new CloudwatchDestinationEndpoint(this, `${key}-endpoint`, {
+                    destinationName: `${key}-endpoint`,
+                    deliveryStream: deliveryStream.deliveryStream,
+                    trustedAccounts: value
+                })
+            })
+        }else if(props.principalOrgIds!=null){
+            if(props.regions!=null && props.regions.length>0) {
+                props.regions.forEach(region => {
+                    new CloudwatchDestinationEndpoint(this, `${region}-endpoint`, {
+                        destinationName: `${region}-endpoint`,
+                        deliveryStream: deliveryStream.deliveryStream,
+                        principalOrgIds: props.principalOrgIds
+                    })
+                })
+            }else{
+                throw new Error("You must specify regions when you specify principalOrgIds")
+            }
+        }else{
+            throw new Error("You must specify either trustedAccounts or principalOrgIds and regions")
+        }
 
         NagSuppressions.addResourceSuppressionsByPath(this,"/LogDestinationStack/centralized-logging-role/DefaultPolicy/Resource", [
             {

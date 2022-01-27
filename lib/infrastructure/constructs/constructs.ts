@@ -17,7 +17,16 @@
  */
 
 import {Construct} from "constructs";
-import {Effect, PolicyDocument, PolicyStatement, Role, ServicePrincipal} from "aws-cdk-lib/aws-iam";
+import {
+    AccountPrincipal,
+    AnyPrincipal,
+    Effect, IPrincipal,
+    OrganizationPrincipal,
+    PolicyDocument,
+    PolicyStatement,
+    Role,
+    ServicePrincipal
+} from "aws-cdk-lib/aws-iam";
 import {Bucket} from "aws-cdk-lib/aws-s3";
 import {NodejsFunction} from "aws-cdk-lib/aws-lambda-nodejs";
 import {Aws, CfnOutput, Duration, Environment, StackProps} from "aws-cdk-lib";
@@ -35,49 +44,80 @@ export interface KinesisDeliveryStreamProps extends StackProps {
 
 export interface CloudwatchDestinationEndpointProps extends StackProps {
     deliveryStream: CfnDeliveryStream,
-    readonly trustedAccounts: Environment[],
+    trustedAccounts?: Environment[],
+    principalOrgIds?: string[]
+
     destinationName: string
 }
 
 export class CloudwatchDestinationEndpoint extends Construct {
     constructor(scope: Construct, id: string, props: CloudwatchDestinationEndpointProps) {
         super(scope, id);
-        const principals = props.trustedAccounts.map(account => {
-            return `arn:aws:logs:${account.region}:${account.account}:*`
-        })
-        //push the current account and region as well
-        principals.push(`arn:aws:logs:${Aws.REGION}:${Aws.ACCOUNT_ID}:*`)
 
+        let withOrgIds = false
+        if (props.trustedAccounts != null) {
+            if (props.principalOrgIds != null) {
+                throw new Error("You cannot specify both trustedAccounts and principalOrgIds")
+            }
+
+
+        } else if (props.principalOrgIds != null) {
+
+            withOrgIds = true
+
+        } else {
+            throw new Error("You must specify either trustedAccounts or principalOrgIds and regions")
+        }
+        const cloudWatchLogsToKinesisFirehosePolicyStatement = new PolicyStatement({
+            effect: Effect.ALLOW,
+            actions: ["firehose:PutRecord", "firehose:PutRecordBatch", "firehose:ListDeliveryStreams", "firehose:DescribeDeliveryStream"],
+            resources: [props.deliveryStream.attrArn]
+        })
+        if (withOrgIds) {
+            cloudWatchLogsToKinesisFirehosePolicyStatement.addCondition("StringEquals", {"aws:PrincipalOrgID": props.principalOrgIds})
+        }
         const cloudWatchLogsToKinesisFirehoseRole = new Role(this, `${props.destinationName}-role`, {
-            assumedBy: new ServicePrincipal("logs.amazonaws.com").withConditions({
-                'StringLike': {
-                    "aws:SourceArn": principals
-                },
-            }),
+            assumedBy: new ServicePrincipal("logs.amazonaws.com"),
             inlinePolicies: {
                 "0": new PolicyDocument({
-                    statements: [new PolicyStatement({
-                        effect: Effect.ALLOW,
-                        actions: ["firehose:PutRecord","firehose:PutRecordBatch","firehose:ListDeliveryStreams","firehose:DescribeDeliveryStream"],
-                        resources: [props.deliveryStream.attrArn],
-
-                    })]
+                    statements: [cloudWatchLogsToKinesisFirehosePolicyStatement]
                 })
             }
 
         })
-        cloudWatchLogsToKinesisFirehoseRole.grantPassRole(cloudWatchLogsToKinesisFirehoseRole)
-        const accounts = props.trustedAccounts.map(account => {
-            return account.account
-        })
-        accounts.push(Aws.ACCOUNT_ID)
-        const destinationPolicy = {
-            "Effect": "Allow",
-            "Principal": {
-                "AWS": accounts
-            },
-            "Action": "logs:PutSubscriptionFilter",
-            "Resource": `arn:aws:logs:${Aws.REGION}:${Aws.ACCOUNT_ID}:destination:${props.destinationName}`
+
+        let destinationPolicyStatement
+        if (withOrgIds) {
+            destinationPolicyStatement = new PolicyStatement({
+                effect: Effect.ALLOW,
+                principals: [new AnyPrincipal()],
+                actions: [
+                    "logs:PutSubscriptionFilter"
+                ],
+                resources: [
+                    `arn:${Aws.PARTITION}:logs:${Aws.REGION}:${Aws.ACCOUNT_ID}:destination:${props.destinationName}`
+                ],
+                conditions: {
+                    StringEquals: {
+                        "aws:PrincipalOrgID": props.principalOrgIds
+                    }
+                }
+            })
+        } else {
+            const accountPrincipals: IPrincipal[] = props.trustedAccounts!.map(account => {
+                return new AccountPrincipal(account.account)
+            })
+            accountPrincipals.push(new AccountPrincipal(Aws.ACCOUNT_ID))
+            destinationPolicyStatement = new PolicyStatement({
+                effect: Effect.ALLOW,
+                principals: accountPrincipals,
+                actions: [
+                    "logs:PutSubscriptionFilter"
+                ],
+                resources: [
+                    `arn:${Aws.PARTITION}:logs:${Aws.REGION}:${Aws.ACCOUNT_ID}:destination:${props.destinationName}`
+                ]
+            })
         }
 
         const destination = new CrossAccountDestination(this, props.destinationName, {
@@ -86,9 +126,9 @@ export class CloudwatchDestinationEndpoint extends Construct {
             destinationName: props.destinationName,
         })
 
-        destination.addToPolicy(PolicyStatement.fromJson(destinationPolicy))
+        destination.addToPolicy(destinationPolicyStatement)
         new CfnOutput(this, `${props.destinationName}-arn`, {
-            value: destinationPolicy.Resource
+            value: destination.destinationArn
         })
     }
 }
@@ -112,8 +152,8 @@ export class KinesisDeliveryStream extends Construct {
         kinesisDynamicPartitionLambda.grantInvoke(centralizedLoggingRole)
         this.deliveryStream = new CfnDeliveryStream(this, "delivery-stream", {
             deliveryStreamType: "DirectPut",
-            deliveryStreamEncryptionConfigurationInput:{
-                keyType:"AWS_OWNED_CMK"
+            deliveryStreamEncryptionConfigurationInput: {
+                keyType: "AWS_OWNED_CMK"
             },
             extendedS3DestinationConfiguration: {
                 bucketArn: bucket.bucketArn,
