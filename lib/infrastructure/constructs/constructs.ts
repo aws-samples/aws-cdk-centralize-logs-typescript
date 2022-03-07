@@ -143,7 +143,7 @@ export class KinesisDeliveryStream extends Construct {
         const bucket = props.destinationBucket
         const kinesisDynamicPartitionLambda = new NodejsFunction(this, "kinesisDynamicPartitionLambda", {
             memorySize: 128,
-            timeout: Duration.seconds(5),
+            timeout: Duration.seconds(60),
             runtime: Runtime.NODEJS_14_X,
             handler: "lambdaHandler",
             entry: path.join(__dirname, `/../../runtime/functions/kinesisDynamicPartitionLambda.ts`),
