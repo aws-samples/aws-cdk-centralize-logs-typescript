@@ -12,6 +12,6 @@ Solution is based heavily on [Centralize Cloudwatch Log with CDK](https://github
 
 * `npm run build`   compile typescript to js
 * `cdk deploy -c account=<your_account> -c region=<your_region> -c trustedAccounts=<accountId>:<region>,<accountId>:<region>,...`
-or
+<br/>or<br/>
 * `cdk deploy -c account=<your_account> -c region=<your_region> -c principalOrgIds=<orgId>,<orgId>,... -c regions=<region>,<region>,..`
 

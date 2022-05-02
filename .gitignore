@@ -14,3 +14,4 @@ third-party-licenses.txt
 .DS_Store
 *.iml
 cdk.context.json
+*.dat
